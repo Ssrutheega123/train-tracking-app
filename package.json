@@ -1,0 +1,11 @@
+{
+  "name": "train-alarm-system",
+  "version": "1.0.0",
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "scripts": {
+    "dev": "concurrently \"cd backend && npm start\" \"cd frontend && npm start\"",
+    "start-all": "concurrently \"cd backend && npm start\" \"cd frontend && npm start\" \"cd TrainTrack && venv\\Scripts\\activate && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000\""
+  }
+}

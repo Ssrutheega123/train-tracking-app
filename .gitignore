@@ -1,0 +1,38 @@
+.env
+node_modules/
+
+
+train-alarm-app/
+├── backend/                # Server-side (Node.js & Express)
+│   ├── config/
+│   │   └── db.js           # Database connection (if saving user trips)
+│   ├── controllers/
+│   │   └── trainController.js # Logic to fetch data from RapidAPI/IRCTC
+│   ├── routes/
+│   │   └── trainRoutes.js  # API Endpoints (e.g., /api/train-status)
+│   ├── .env                # PRIVATE: API Keys & Port numbers
+│   ├── index.js            # Main server entry point
+│   └── package.json        # Backend dependencies
+│
+├── frontend/               # Client-side (React.js + PWA)
+│   ├── public/
+│   │   ├── icons/          # App icons for mobile home screen
+│   │   ├── alarm-tone.mp3  # The high-frequency alert sound
+│   │   ├── manifest.json   # PWA configuration for "Install" feature
+│   │   └── index.html      # Root HTML file
+│   ├── src/
+│   │   ├── components/     # UI Building Blocks
+│   │   │   ├── MapDisplay.jsx   # Leaflet.js map component
+│   │   │   ├── SearchBar.jsx    # Train number input
+│   │   │   └── AlarmToggle.jsx  # Start/Stop tracking button
+│   │   ├── hooks/
+│   │   │   └── useGeolocation.js # Custom hook for navigator.watchPosition
+│   │   ├── utils/
+│   │   │   └── distanceCalc.js  # Haversine Formula logic
+│   │   ├── App.js          # Main logic (State & Audio trigger)
+│   │   ├── index.js        # React DOM render
+│   │   └── serviceWorkerRegistration.js # Registers the background script
+│   ├── sw.js               # Service Worker script (Background Tracking)
+│   └── package.json        # Frontend dependencies
+│
+└── README.md               # Setup instructions and documentation
