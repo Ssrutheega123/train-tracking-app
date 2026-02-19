@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="description" content="Train Destination Alarm — Never miss your stop again" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Train Alarm — Never Miss Your Stop</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a24;
+      --border: #2a2a3a;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --orange: #f97316;
+      --orange-dim: rgba(249,115,22,0.15);
+      --yellow: #fbbf24;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #60a5fa;
+      --font-mono: 'Space Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-mono); overflow-x: hidden; }
+
+    /* ─── SCROLLBAR ─────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ─── LAYOUT ────────────────────────────────────────────────── */
+    #root { min-height: 100vh; display: flex; flex-direction: column; }
+
+    .app { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+    /* ─── HEADER ────────────────────────────────────────────────── */
+    .header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-brand { display: flex; align-items: center; gap: 0.75rem; }
+    .header-icon { font-size: 1.5rem; }
+    .header-title { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; letter-spacing: -0.02em; }
+    .header-title span { color: var(--orange); }
+    .status-pill {
+      font-size: 0.65rem; padding: 0.25rem 0.6rem;
+      border-radius: 999px; border: 1px solid;
+      font-family: var(--font-mono); letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .status-pill.idle     { border-color: var(--border); color: var(--muted); }
+    .status-pill.tracking { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.1); animation: pulse-pill 2s infinite; }
+    .status-pill.alarm    { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.15); animation: pulse-pill 0.5s infinite; }
+    .status-pill.demo     { border-color: var(--blue); color: var(--blue); background: rgba(96,165,250,0.1); }
+
+    @keyframes pulse-pill { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* ─── MAIN GRID ─────────────────────────────────────────────── */
+    .main { display: grid; grid-template-columns: 380px 1fr; height: calc(100vh - 61px); overflow: hidden; }
+    @media (max-width: 768px) { .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } }
+
+    /* ─── SIDEBAR ───────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface); border-right: 1px solid var(--border);
+      overflow-y: auto; display: flex; flex-direction: column; gap: 0;
+    }
+
+    .section { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); }
+    .section-label {
+      font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--muted); margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ─── FORM ELEMENTS ─────────────────────────────────────────── */
+    .input-group { display: flex; gap: 0.5rem; }
+    .input {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 0.6rem 0.75rem; font-family: var(--font-mono);
+      font-size: 0.8rem; border-radius: 6px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .input:focus { border-color: var(--orange); }
+    .input::placeholder { color: var(--muted); }
+
+    .btn {
+      padding: 0.6rem 1rem; font-family: var(--font-mono); font-size: 0.75rem;
+      border: 1px solid; border-radius: 6px; cursor: pointer;
+      transition: all 0.15s; display: flex; align-items: center; gap: 0.4rem;
+      white-space: nowrap; font-weight: 700; letter-spacing: 0.02em;
+    }
+    .btn-primary { background: var(--orange); border-color: var(--orange); color: #000; }
+    .btn-primary:hover { background: #ea6c0f; }
+    .btn-ghost { background: transparent; border-color: var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
+    .btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
+    .btn-blue { background: var(--blue); border-color: var(--blue); color: #000; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ─── STATION SELECT ────────────────────────────────────────── */
+    .station-list { display: flex; flex-direction: column; gap: 0.35rem; max-height: 260px; overflow-y: auto; }
+    .station-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 0.75rem; border-radius: 6px; cursor: pointer;
+      border: 1px solid transparent; transition: all 0.15s;
+      font-size: 0.75rem;
+    }
+    .station-item:hover { background: var(--surface2); border-color: var(--border); }
+    .station-item.selected { background: var(--orange-dim); border-color: var(--orange); }
+    .station-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .station-dot.origin   { background: var(--green); }
+    .station-dot.terminus { background: var(--red); }
+    .station-dot.passed   { background: var(--muted); }
+    .station-dot.next     { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+    .station-dot.default  { background: var(--border); }
+    .station-name { flex: 1; font-weight: 700; }
+    .station-code { color: var(--muted); font-size: 0.65rem; }
+    .station-eta  { font-size: 0.65rem; color: var(--yellow); margin-left: auto; }
+
+    /* ─── DISTANCE DISPLAY ──────────────────────────────────────── */
+    .distance-panel { text-align: center; padding: 1.5rem; }
+    .distance-big {
+      font-family: var(--font-display); font-size: 3.5rem; font-weight: 800;
+      line-height: 1; letter-spacing: -0.04em;
+    }
+    .distance-unit { font-size: 1rem; color: var(--muted); font-family: var(--font-mono); }
+    .distance-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.25rem; }
+
+    .progress-bar-wrap { margin: 1rem 0; }
+    .progress-bar-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease, background 0.5s; }
+
+    /* ─── ALARM STATES ──────────────────────────────────────────── */
+    .alarm-panel {
+      padding: 1rem 1.5rem; text-align: center;
+      border-radius: 8px; margin: 0 1rem 1rem;
+    }
+    .alarm-panel.safe        { background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.2); }
+    .alarm-panel.approaching { background: rgba(251,191,36,0.05); border: 1px solid rgba(251,191,36,0.3); }
+    .alarm-panel.pre-alert   { background: rgba(249,115,22,0.08); border: 1px solid var(--orange); }
+    .alarm-panel.alarm       { background: rgba(239,68,68,0.1); border: 1px solid var(--red); animation: alarm-flash 0.5s infinite alternate; }
+
+    @keyframes alarm-flash { from { background: rgba(239,68,68,0.05); } to { background: rgba(239,68,68,0.25); } }
+
+    .alarm-emoji { font-size: 2rem; margin-bottom: 0.25rem; }
+    .alarm-title { font-family: var(--font-display); font-weight: 800; font-size: 1rem; }
+    .alarm-sub   { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
+
+    /* ─── MAP ───────────────────────────────────────────────────── */
+    .map-container { position: relative; height: 100%; }
+    #map { width: 100%; height: 100%; background: #0d0d14; }
+    @media (max-width: 768px) { #map { height: 300px; } }
+
+    /* ─── MAP OVERLAY ───────────────────────────────────────────── */
+    .map-overlay {
+      position: absolute; top: 1rem; right: 1rem; z-index: 1000;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.75rem 1rem; min-width: 180px;
+      font-size: 0.7rem;
+    }
+    .map-stat { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.35rem; }
+    .map-stat:last-child { margin-bottom: 0; }
+    .map-stat-label { color: var(--muted); }
+    .map-stat-value { font-weight: 700; color: var(--text); }
+    .map-stat-value.orange { color: var(--orange); }
+    .map-stat-value.green  { color: var(--green); }
+
+    /* ─── DEMO BANNER ───────────────────────────────────────────── */
+    .demo-banner {
+      background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.3);
+      padding: 0.6rem 1.5rem; font-size: 0.68rem; color: var(--blue);
+      display: flex; align-items: center; gap: 0.5rem; text-align: center;
+      justify-content: center;
+    }
+
+    /* ─── LOADING ───────────────────────────────────────────────── */
+    .loading { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
+    .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--orange); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── ERROR ─────────────────────────────────────────────────── */
+    .error-box { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.72rem; color: #fca5a5; margin: 0.5rem 1.5rem; }
+
+    /* ─── GPS INFO ──────────────────────────────────────────────── */
+    .gps-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.65rem; color: var(--muted); padding: 0.5rem 1.5rem; }
+    .gps-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 0.35rem; }
+    .gps-dot.active { background: var(--green); box-shadow: 0 0 4px var(--green); animation: pulse-pill 1.5s infinite; }
+    .gps-dot.inactive { background: var(--muted); }
+
+    /* ─── SIMULATION CONTROLS ───────────────────────────────────── */
+    .sim-controls { display: flex; flex-direction: column; gap: 0.5rem; }
+    .sim-row { display: flex; gap: 0.5rem; align-items: center; }
+    .sim-label { font-size: 0.65rem; color: var(--muted); min-width: 80px; }
+    .range-input { flex: 1; accent-color: var(--blue); }
+
+    /* ─── TABS ──────────────────────────────────────────────────── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab { flex: 1; padding: 0.6rem; font-family: var(--font-mono); font-size: 0.68rem; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+    /* ─── TOOLTIP ───────────────────────────────────────────────── */
+    .tooltip { font-size: 0.65rem; color: var(--muted); margin-top: 0.5rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React & ReactDOM -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+<!-- Babel for JSX -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────────────────────────────────────
+const BACKEND_URL = 'http://localhost:5000';
+const ALARM_THRESHOLD_KM = 2;       // Trigger alarm within 2 km
+const PRE_ALERT_THRESHOLD_KM = 15;  // Show warning within 15 km
+
+// ──────────────────────────────────────────────────────────────────────────────
+// HAVERSINE FORMULA
+// ──────────────────────────────────────────────────────────────────────────────
+function haversineKm(lat1, lon1, lat2, lon2) {
+  if (lat1==null||lon1==null||lat2==null||lon2==null) return Infinity;
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function formatDist(km) {
+  if (!isFinite(km)) return '—';
+  if (km < 1) return `${Math.round(km*1000)} m`;
+  if (km < 10) return km.toFixed(2);
+  return Math.round(km).toString();
+}
+
+function distUnit(km) {
+  if (!isFinite(km)) return '';
+  return km < 1 ? '' : ' km';
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AUDIO ENGINE
+// ──────────────────────────────────────────────────────────────────────────────
+function createAlarmAudio() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playTone(freq, duration, gainVal = 0.4) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  }
+
+  return {
+    playAlarm() {
+      // High-pitched repeating alarm pattern
+      const pattern = [880, 1100, 880, 1100, 660, 880];
+      pattern.forEach((freq, i) => {
+        setTimeout(() => playTone(freq, 0.4, 0.5), i * 350);
+      });
+    },
+    playPreAlert() {
+      playTone(660, 0.3, 0.3);
+      setTimeout(() => playTone(880, 0.3, 0.3), 400);
+    },
+    playClick() { playTone(440, 0.08, 0.2); },
+    resume() { if (ctx.state === 'suspended') ctx.resume(); },
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MAP COMPONENT
+// ──────────────────────────────────────────────────────────────────────────────
+function TrainMap({ stations, userPos, destIndex, alarmState }) {
+  const mapRef = useRef(null);
+  const leafletRef = useRef(null);
+  const markersRef = useRef([]);
+  const userMarkerRef = useRef(null);
+  const routeLineRef = useRef(null);
+
+  useEffect(() => {
+    if (leafletRef.current) return;
+    const map = L.map('map', {
+      center: [20.5937, 78.9629],
+      zoom: 5,
+      zoomControl: true,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 18,
+    }).addTo(map);
+    leafletRef.current = map;
+    mapRef.current = map;
+  }, []);
+
+  // Draw route & station markers
+  useEffect(() => {
+    const map = leafletRef.current;
+    if (!map || !stations?.length) return;
+
+    // Clear old markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+    if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null; }
+
+    const validStations = stations.filter(s => s.latitude && s.longitude);
+    if (!validStations.length) return;
+
+    // Draw route polyline
+    const latlngs = validStations.map(s => [s.latitude, s.longitude]);
+    routeLineRef.current = L.polyline(latlngs, {
+      color: '#f97316', weight: 3, opacity: 0.7, dashArray: '8,4'
+    }).addTo(map);
+
+    // Station markers
+    validStations.forEach((s, i) => {
+      const isOrigin = i === 0;
+      const isDest = s.index === destIndex;
+      const color = isOrigin ? '#22c55e' : isDest ? '#ef4444' : '#6b6b80';
+      const size = isDest || isOrigin ? 14 : 9;
+
+      const icon = L.divIcon({
+        html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid #0a0a0f;box-shadow:0 0 ${isDest?'12px':'4px'} ${color}"></div>`,
+        className: '', iconAnchor: [size/2, size/2],
+      });
+
+      const marker = L.marker([s.latitude, s.longitude], { icon })
+        .addTo(map)
+        .bindPopup(`<b>${s.name}</b><br><small>${s.code} | ${s.arrivalTime}</small>`);
+      markersRef.current.push(marker);
+    });
+
+    // Fit map to route
+    map.fitBounds(routeLineRef.current.getBounds(), { padding: [40, 40] });
+  }, [stations, destIndex]);
+
+  // User location marker
+  useEffect(() => {
+    const map = leafletRef.current;
+    if (!map || !userPos) return;
+
+    const pulseColor = alarmState === 'alarm' ? '#ef4444' : '#60a5fa';
+    const icon = L.divIcon({
+      html: `<div style="width:16px;height:16px;background:${pulseColor};border-radius:50%;border:3px solid #fff;box-shadow:0 0 12px ${pulseColor};animation:none"></div>`,
+      className: '', iconAnchor: [8, 8],
+    });
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setLatLng([userPos.lat, userPos.lon]);
+      userMarkerRef.current.setIcon(icon);
+    } else {
+      userMarkerRef.current = L.marker([userPos.lat, userPos.lon], { icon })
+        .addTo(map)
+        .bindPopup('<b>Your Location</b>');
+    }
+  }, [userPos, alarmState]);
+
+  return <div id="map" />;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MAIN APP
+// ──────────────────────────────────────────────────────────────────────────────
+function App() {
+  // ── State ──────────────────────────────────────────────────────
+  const [tab, setTab] = useState('live'); // 'live' | 'demo'
+  const [trainNo, setTrainNo] = useState('');
+  const [stations, setStations] = useState([]);
+  const [trainName, setTrainName] = useState('');
+  const [destIndex, setDestIndex] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+
+  const [isTracking, setIsTracking] = useState(false);
+  const [userPos, setUserPos] = useState(null);
+  const [gpsError, setGpsError] = useState('');
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+
+  const [alarmState, setAlarmState] = useState('idle'); // idle|safe|approaching|pre-alert|alarm
+  const [alarmDismissed, setAlarmDismissed] = useState(false);
+  const [alarmActive, setAlarmActive] = useState(false);
+
+  // Demo simulation
+  const [simActive, setSimActive] = useState(false);
+  const [simSpeed, setSimSpeed] = useState(100);
+  const simRef = useRef(null);
+  const simSegRef = useRef(0);
+  const simStepRef = useRef(0);
+
+  // Refs
+  const watchIdRef = useRef(null);
+  const audioRef = useRef(null);
+  const alarmIntervalRef = useRef(null);
+  const swRef = useRef(null);
+
+  // ── Audio init (requires user gesture) ────────────────────────
+  const initAudio = useCallback(() => {
+    if (!audioRef.current) {
+      audioRef.current = createAlarmAudio();
+    }
+    audioRef.current.resume();
+  }, []);
+
+  // ── Service Worker ─────────────────────────────────────────────
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        swRef.current = reg;
+        console.log('[App] SW registered');
+      }).catch(e => console.warn('[App] SW failed:', e));
+
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.type === 'DISMISS_ALARM') dismissAlarm();
+        if (e.data?.type === 'SNOOZE_ALARM') snoozeAlarm(e.data.duration);
+      });
+    }
+  }, []);
+
+  // ── Fetch Train Data ───────────────────────────────────────────
+  async function fetchTrain(useDemo = false) {
+    const num = trainNo.trim();
+    if (!/^\d{5}$/.test(num)) { setFetchError('Enter a valid 5-digit train number.'); return; }
+
+    setLoading(true); setFetchError(''); setStations([]); setDestIndex(null);
+    try {
+      const endpoint = useDemo ? `${BACKEND_URL}/api/demo/${num}` : `${BACKEND_URL}/api/train/${num}`;
+      const res = await fetch(endpoint);
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error || 'Failed to fetch');
+
+      setStations(data.stations);
+      setTrainName(data.trainName || `Train ${num}`);
+      setFetchError('');
+
+      // Cache route in SW for offline use
+      if (swRef.current?.active) {
+        swRef.current.active.postMessage({ type: 'CACHE_ROUTE', payload: data.stations });
+      }
+    } catch (e) {
+      setFetchError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── GPS Tracking ───────────────────────────────────────────────
+  function startTracking() {
+    initAudio();
+    if (!navigator.geolocation) { setGpsError('Geolocation not supported.'); return; }
+    setIsTracking(true); setAlarmDismissed(false); setGpsError('');
+
+    const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      pos => {
+        setUserPos({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setGpsAccuracy(Math.round(pos.coords.accuracy));
+        setGpsError('');
+      },
+      err => {
+        const msgs = { 1: 'Location denied — enable GPS in browser.', 2: 'GPS unavailable.', 3: 'GPS timed out.' };
+        setGpsError(msgs[err.code] || 'GPS error.');
+      },
+      options
+    );
+  }
+
+  function stopTracking() {
+    setIsTracking(false);
+    if (watchIdRef.current) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+    setAlarmState('idle');
+    stopAlarmSound();
+    setSimActive(false);
+  }
+
+  // ── Demo Simulation ────────────────────────────────────────────
+  function startSimulation() {
+    initAudio();
+    if (!stations.length || destIndex === null) return;
+    setSimActive(true); setIsTracking(true); setAlarmDismissed(false);
+    simSegRef.current = 0; simStepRef.current = 0;
+
+    const STEPS = 80;
+    const INTERVAL = Math.max(50, 5000 / simSpeed);
+
+    simRef.current = setInterval(() => {
+      const validStations = stations.filter(s => s.latitude && s.longitude);
+      const seg = simSegRef.current;
+      if (seg >= validStations.length - 1) { clearInterval(simRef.current); return; }
+
+      const from = validStations[seg];
+      const to = validStations[seg + 1];
+      const t = simStepRef.current / STEPS;
+
+      const lat = from.latitude + (to.latitude - from.latitude) * t;
+      const lon = from.longitude + (to.longitude - from.longitude) * t;
+      setUserPos({ lat, lon });
+
+      simStepRef.current++;
+      if (simStepRef.current > STEPS) { simStepRef.current = 0; simSegRef.current++; }
+    }, INTERVAL);
+  }
+
+  function stopSimulation() {
+    clearInterval(simRef.current);
+    setSimActive(false);
+    stopTracking();
+    setUserPos(null);
+  }
+
+  // ── Compute distances & alarm state ───────────────────────────
+  const { distToDest, distToPrev, alarmStateCalc } = useMemo(() => {
+    if (!userPos || destIndex === null || !stations.length) {
+      return { distToDest: Infinity, distToPrev: Infinity, alarmStateCalc: 'idle' };
+    }
+    const dest = stations[destIndex];
+    const prev = destIndex > 0 ? stations[destIndex - 1] : null;
+
+    const distToDest = dest?.latitude
+      ? haversineKm(userPos.lat, userPos.lon, dest.latitude, dest.longitude) : Infinity;
+    const distToPrev = prev?.latitude
+      ? haversineKm(userPos.lat, userPos.lon, prev.latitude, prev.longitude) : Infinity;
+
+    let state = 'safe';
+    if (distToDest <= ALARM_THRESHOLD_KM) state = 'alarm';
+    else if (distToPrev <= 0.5) state = 'pre-alert';
+    else if (distToDest <= PRE_ALERT_THRESHOLD_KM) state = 'approaching';
+
+    return { distToDest, distToPrev, alarmStateCalc: state };
+  }, [userPos, destIndex, stations]);
+
+  // ── Trigger alarm effects ──────────────────────────────────────
+  useEffect(() => {
+    if (!isTracking || alarmDismissed) return;
+    setAlarmState(alarmStateCalc);
+
+    if (alarmStateCalc === 'alarm' && !alarmActive) {
+      setAlarmActive(true);
+      triggerAlarm();
+    } else if (alarmStateCalc === 'pre-alert') {
+      audioRef.current?.playPreAlert();
+      // Notify SW
+      swRef.current?.active?.postMessage({
+        type: 'PRE_ALERT',
+        payload: {
+          prevStationName: destIndex > 0 ? stations[destIndex-1]?.name : '',
+          destStationName: stations[destIndex]?.name,
+        }
+      });
+    }
+  }, [alarmStateCalc, isTracking, alarmDismissed]);
+
+  function triggerAlarm() {
+    // Request notification permission & show
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') {
+        const dest = stations[destIndex];
+        swRef.current?.active?.postMessage({
+          type: 'TRIGGER_ALARM',
+          payload: { stationName: dest?.name, distance: distToDest }
+        });
+      }
+    });
+
+    // Vibrate
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 1000]);
+
+    // Loop alarm sound
+    audioRef.current?.playAlarm();
+    alarmIntervalRef.current = setInterval(() => {
+      audioRef.current?.playAlarm();
+      if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+    }, 3000);
+  }
+
+  function stopAlarmSound() {
+    clearInterval(alarmIntervalRef.current);
+    setAlarmActive(false);
+  }
+
+  function dismissAlarm() {
+    stopAlarmSound();
+    setAlarmDismissed(true);
+    setAlarmState('safe');
+    audioRef.current?.playClick();
+  }
+
+  function snoozeAlarm(durationMs = 120000) {
+    stopAlarmSound();
+    setAlarmDismissed(true);
+    setTimeout(() => setAlarmDismissed(false), durationMs);
+  }
+
+  // ── Progress bar ───────────────────────────────────────────────
+  const totalRouteKm = useMemo(() => {
+    if (stations.length < 2) return 1;
+    const first = stations[0], last = stations[stations.length-1];
+    return haversineKm(first?.latitude, first?.longitude, last?.latitude, last?.longitude) || 1;
+  }, [stations]);
+
+  const progressPct = useMemo(() => {
+    if (!userPos || !stations.length) return 0;
+    const first = stations[0];
+    const traveled = haversineKm(first?.latitude, first?.longitude, userPos.lat, userPos.lon);
+    return Math.min(100, (traveled / totalRouteKm) * 100);
+  }, [userPos, stations, totalRouteKm]);
+
+  // ── Alarm panel config ─────────────────────────────────────────
+  const alarmConfig = {
+    idle:        { emoji: '🚂', title: 'Set Your Destination', sub: 'Search a train and select your stop', color: 'var(--muted)' },
+    safe:        { emoji: '✅', title: 'Tracking Active', sub: `${formatDist(distToDest)}${distUnit(distToDest)} to destination`, color: 'var(--green)' },
+    approaching: { emoji: '⚠️', title: 'Approaching Destination', sub: `${formatDist(distToDest)} km remaining — stay alert`, color: 'var(--yellow)' },
+    'pre-alert': { emoji: '🔔', title: 'Next Stop Is Yours!', sub: 'Prepare to deboard the train', color: 'var(--orange)' },
+    alarm:       { emoji: '🚨', title: 'WAKE UP!', sub: `${stations[destIndex]?.name} is ${formatDist(distToDest)}${distUnit(distToDest)} away!`, color: 'var(--red)' },
+  };
+  const cfg = alarmConfig[alarmState] || alarmConfig.idle;
+
+  const progressColor = alarmState === 'alarm' ? 'var(--red)'
+    : alarmState === 'pre-alert' ? 'var(--orange)'
+    : alarmState === 'approaching' ? 'var(--yellow)'
+    : 'var(--green)';
+
+  const statusLabel = simActive ? 'DEMO' : isTracking ? (alarmState === 'alarm' ? 'ALARM' : 'TRACKING') : 'IDLE';
+  const statusClass = simActive ? 'demo' : isTracking ? (alarmState === 'alarm' ? 'alarm' : 'tracking') : 'idle';
+
+  return (
+    <div className="app">
+      {/* ── HEADER ──────────────────────────────────────── */}
+      <header className="header">
+        <div className="header-brand">
+          <span className="header-icon">🚂</span>
+          <h1 className="header-title">Train<span>Alarm</span></h1>
+        </div>
+        <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+      </header>
+
+      {simActive && (
+        <div className="demo-banner">
+          🎬 SIMULATION MODE — Simulating journey at {simSpeed}× speed for demo/testing
+        </div>
+      )}
+
+      <div className="main">
+        {/* ── SIDEBAR ─────────────────────────────────────── */}
+        <aside className="sidebar">
+
+          {/* Search section */}
+          <div className="section">
+            <div className="section-label">Search Train</div>
+            <div className="tabs" style={{marginBottom:'0.75rem'}}>
+              <button className={`tab ${tab==='live'?'active':''}`} onClick={()=>setTab('live')}>🔴 Live Mode</button>
+              <button className={`tab ${tab==='demo'?'active':''}`} onClick={()=>setTab('demo')}>🎬 Demo Mode</button>
+            </div>
+            <div className="input-group">
+              <input
+                className="input"
+                placeholder="Train No. (e.g. 12043)"
+                value={trainNo}
+                onChange={e => setTrainNo(e.target.value)}
+                onKeyDown={e => e.key==='Enter' && fetchTrain(tab==='demo')}
+                maxLength={5}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={() => fetchTrain(tab==='demo')}
+                disabled={loading}
+              >
+                {loading ? '...' : '→'}
+              </button>
+            </div>
+            {tab === 'demo' && (
+              <p className="tooltip" style={{marginTop:'0.5rem'}}>
+                💡 Demo mode loads mock data (Chennai–Coimbatore route). No real train API needed — perfect for testing!
+              </p>
+            )}
+            {fetchError && <div className="error-box" style={{marginTop:'0.5rem', marginLeft:0, marginRight:0}}>{fetchError}</div>}
+          </div>
+
+          {/* Loading */}
+          {loading && <div className="loading"><div className="spinner"/><span>Fetching route...</span></div>}
+
+          {/* Station list */}
+          {stations.length > 0 && (
+            <div className="section">
+              <div className="section-label">Select Destination ({stations.length} stops)</div>
+              {trainName && <div style={{fontSize:'0.72rem',color:'var(--orange)',marginBottom:'0.5rem',fontFamily:'var(--font-display)',fontWeight:700}}>{trainName}</div>}
+              <div className="station-list">
+                {stations.map((s, i) => {
+                  const isFirst = i === 0;
+                  const isLast = i === stations.length - 1;
+                  const isDest = i === destIndex;
+                  const dotClass = isFirst ? 'origin' : isLast ? 'terminus' : isDest ? 'next' : 'default';
+                  return (
+                    <div
+                      key={i}
+                      className={`station-item ${isDest ? 'selected' : ''}`}
+                      onClick={() => { if(!isFirst){ setDestIndex(i); audioRef.current?.playClick(); initAudio(); } }}
+                    >
+                      <div className={`station-dot ${dotClass}`}/>
+                      <div>
+                        <div className="station-name">{s.name}</div>
+                        <div className="station-code">{s.code}</div>
+                      </div>
+                      <div className="station-eta">{s.arrivalTime}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Alarm panel */}
+          {(isTracking || destIndex !== null) && (
+            <div className={`alarm-panel ${alarmState}`} style={{marginTop:'0.5rem'}}>
+              <div className="alarm-emoji">{cfg.emoji}</div>
+              <div className="alarm-title" style={{color: cfg.color}}>{cfg.title}</div>
+              <div className="alarm-sub">{cfg.sub}</div>
+              {alarmState === 'alarm' && !alarmDismissed && (
+                <button className="btn btn-danger" style={{margin:'0.75rem auto 0',display:'flex'}} onClick={dismissAlarm}>
+                  ✅ I'm Awake — Stop Alarm
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Distance display */}
+          {isTracking && destIndex !== null && (
+            <div className="section">
+              <div className="distance-panel" style={{padding:'0.75rem 0'}}>
+                <div className="distance-big" style={{color: cfg.color}}>
+                  {formatDist(distToDest)}
+                </div>
+                <div className="distance-unit">{distUnit(distToDest)}</div>
+                <div className="distance-label">to {stations[destIndex]?.name || 'destination'}</div>
+                <div className="progress-bar-wrap">
+                  <div className="progress-bar-track">
+                    <div className="progress-bar-fill" style={{width: `${progressPct}%`, background: progressColor}}/>
+                  </div>
+                </div>
+                <div style={{fontSize:'0.65rem', color:'var(--muted)'}}>Journey progress: {progressPct.toFixed(1)}%</div>
+              </div>
+            </div>
+          )}
+
+          {/* GPS row */}
+          {isTracking && !simActive && (
+            <div className="gps-row">
+              <span>
+                <span className={`gps-dot ${userPos ? 'active' : 'inactive'}`}/>
+                GPS {userPos ? 'locked' : 'searching...'}
+              </span>
+              {gpsAccuracy && <span>±{gpsAccuracy}m</span>}
+              {userPos && <span>{userPos.lat.toFixed(4)}, {userPos.lon.toFixed(4)}</span>}
+            </div>
+          )}
+          {gpsError && <div className="error-box">{gpsError}</div>}
+
+          {/* Controls */}
+          <div className="section">
+            <div className="section-label">Controls</div>
+            {tab === 'live' ? (
+              <div style={{display:'flex', gap:'0.5rem', flexWrap:'wrap'}}>
+                {!isTracking
+                  ? <button className="btn btn-primary" style={{flex:1}} onClick={startTracking} disabled={destIndex===null}>
+                      📍 Start GPS Tracking
+                    </button>
+                  : <button className="btn btn-danger" style={{flex:1}} onClick={stopTracking}>
+                      ⏹ Stop Tracking
+                    </button>
+                }
+              </div>
+            ) : (
+              /* DEMO MODE controls */
+              <div className="sim-controls">
+                <div className="sim-row">
+                  <span className="sim-label">Speed:</span>
+                  <input type="range" className="range-input" min="50" max="500" value={simSpeed}
+                    onChange={e=>setSimSpeed(Number(e.target.value))} />
+                  <span style={{fontSize:'0.65rem',color:'var(--blue)',width:'40px'}}>{simSpeed}×</span>
+                </div>
+                <div className="tooltip">
+                  Simulation skips real GPS. Watch the blue dot travel the route and trigger the alarm when it reaches your selected destination.
+                </div>
+                {!simActive
+                  ? <button className="btn btn-blue" onClick={startSimulation} disabled={destIndex===null || !stations.length}>
+                      ▶ Start Simulation
+                    </button>
+                  : <button className="btn btn-danger" onClick={stopSimulation}>
+                      ⏹ Stop Simulation
+                    </button>
+                }
+              </div>
+            )}
+          </div>
+
+          {/* How to test */}
+          <div className="section">
+            <div className="section-label">How to Test (No Train Needed)</div>
+            <div className="tooltip">
+              1️⃣ Click <b>Demo Mode</b> tab above<br/>
+              2️⃣ Enter any 5-digit number (e.g. <b>12043</b>) → fetch<br/>
+              3️⃣ Select a station in the middle as destination<br/>
+              4️⃣ Set speed to <b>200×</b> and click <b>Start Simulation</b><br/>
+              5️⃣ Watch the alarm fire when the dot reaches your stop! 🎉
+            </div>
+          </div>
+
+        </aside>
+
+        {/* ── MAP ─────────────────────────────────────────────── */}
+        <div className="map-container">
+          <TrainMap
+            stations={stations}
+            userPos={userPos}
+            destIndex={destIndex}
+            alarmState={alarmState}
+          />
+
+          {/* Map overlay stats */}
+          {(isTracking || userPos) && (
+            <div className="map-overlay">
+              <div className="map-stat">
+                <span className="map-stat-label">State</span>
+                <span className="map-stat-value orange">{alarmState.toUpperCase()}</span>
+              </div>
+              {isFinite(distToDest) && (
+                <div className="map-stat">
+                  <span className="map-stat-label">To Dest</span>
+                  <span className="map-stat-value">{formatDist(distToDest)}{distUnit(distToDest)}</span>
+                </div>
+              )}
+              {isFinite(distToPrev) && destIndex > 0 && (
+                <div className="map-stat">
+                  <span className="map-stat-label">Prev Stop</span>
+                  <span className="map-stat-value">{formatDist(distToPrev)}{distUnit(distToPrev)}</span>
+                </div>
+              )}
+              {userPos && (
+                <div className="map-stat">
+                  <span className="map-stat-label">GPS</span>
+                  <span className="map-stat-value green">{simActive ? 'SIM' : `±${gpsAccuracy||'?'}m`}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+
+// Register SW
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

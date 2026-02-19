@@ -21,7 +21,7 @@
     "python.terminal.activateEnvInCurrentTerminal": true,
     "python.testing.pytestEnabled": true,
     "files.autoSave": "afterDelay",
-    "python.languageServer": "Pylance",
+    "python.languageServer": "None",
     "rewrap.wrappingColumn": 80,
     "git.autofetch": true,
     "diffEditor.renderSideBySide": true,
