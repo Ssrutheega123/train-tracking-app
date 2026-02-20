@@ -929,7 +929,33 @@
         if (!navigator.geolocation) { setGpsError('Geolocation not supported.'); return; }
         setIsTracking(true); setAlarmDismissed(false); setGpsError('');
 
-        const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
+        // Adaptive options based on distance to destination
+        function getGpsOptions(distKm) {
+          if (distKm > 100) return {
+            enableHighAccuracy: false,  // uses network/cell tower — low battery
+            timeout: 60000,
+            maximumAge: 120000,         // accept 2 min old position
+          };
+          if (distKm > 50) return {
+            enableHighAccuracy: false,
+            timeout: 30000,
+            maximumAge: 60000,          // accept 1 min old position
+          };
+          if (distKm > 20) return {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 30000,          // accept 30s old position
+          };
+          // Within 20km — full accuracy, frequent updates
+          return {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 5000,           // accept 5s old position
+          };
+        }
+
+        const options = getGpsOptions(distToDest);
+
         watchIdRef.current = navigator.geolocation.watchPosition(
           pos => {
             setUserPos({ lat: pos.coords.latitude, lon: pos.coords.longitude });
@@ -937,7 +963,11 @@
             setGpsError('');
           },
           err => {
-            const msgs = { 1: 'Location denied — enable GPS in browser.', 2: 'GPS unavailable.', 3: 'GPS timed out.' };
+            const msgs = {
+              1: 'Location denied — enable GPS in browser.',
+              2: 'GPS unavailable.',
+              3: 'GPS timed out.'
+            };
             setGpsError(msgs[err.code] || 'GPS error.');
           },
           options
@@ -1281,6 +1311,17 @@
                   3️⃣ Select a station in the middle as destination<br />
                   4️⃣ Set speed to <b>200×</b> and click <b>Start Simulation</b><br />
                   5️⃣ Watch the alarm fire when the dot reaches your stop! 🎉
+                </div>
+              </div>
+              <div className="section">
+                <div className="section-label">🔋 Battery Saving Tips</div>
+                <div className="tooltip">
+                  1️⃣ <b>Keep screen off</b> — GPS still works in background via Service Worker<br />
+                  2️⃣ <b>Lower screen brightness</b> before starting tracking<br />
+                  3️⃣ <b>Close other apps</b> — frees CPU for GPS<br />
+                  4️⃣ <b>Enable battery saver</b> on phone — app still works<br />
+                  5️⃣ <b>Far from destination?</b> App auto-switches to low accuracy mode to save battery<br />
+                  6️⃣ <b>Plug in charger</b> if journey is longer than 3 hours
                 </div>
               </div>
 
