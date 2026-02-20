@@ -20,10 +20,6 @@ train-alarm-app/
 │       ├── sw.js          ← Service Worker (background tracking + notifications)
 │       └── manifest.json  ← PWA config (install on phone)
 │
-├── TrainTrack/            ← Python FastAPI scraper (Port 8000)
-│   ├── app/
-│   │   └── main.py        ← Scrapes NTES + RailYatri for live data
-│   └── requirements.txt
 │
 └── package.json           ← Root scripts (concurrently)
 ```
@@ -43,15 +39,8 @@ npm install
 cd ..
 ```
 
-### Step 2 — Install Python Dependencies
-```bash
-cd TrainTrack
-uv venv              # Create virtual environment
-uv pip install -r requirements.txt
-cd ..
-```
 
-### Step 3 — Start Everything
+### Step 2 — Start Everything
 ```bash
 # Option A: Backend + Frontend only (Demo mode works, Live mode needs Python too)
 npm run dev
@@ -60,7 +49,7 @@ npm run dev
 npm run dev:full
 ```
 
-### Step 4 — Open the App
+### Step 3 — Open the App
 ```
 http://localhost:3000
 ```
@@ -99,22 +88,8 @@ Test with real GPS coordinates in your browser:
 3. Paste coordinates along the route (see table below)
 4. Start GPS tracking in **Live Mode** — distance updates in real time!
 
-| Station          | Latitude   | Longitude  |
-|------------------|-----------|------------|
-| Chennai Central  | 13.0827   | 80.2707    |
-| Katpadi Jn       | 12.9698   | 79.1487    |
-| Jolarpettai      | 12.5667   | 78.5833    |
-| Salem Jn         | 11.6643   | 78.1460    |
-| Erode Jn         | 11.3410   | 77.7172    |
-| **Tiruppur** 📍  | **11.1085**| **77.3411**|
-| Coimbatore Jn    | 11.0168   | 76.9558    |
 
-**Steps:**
-1. Set Coimbatore Jn as your destination (threshold: 2 km)
-2. In DevTools Sensors, enter Tiruppur coordinates (11.1085, 77.3411)
-3. Click **Start GPS Tracking** in Live Mode
-4. The alarm triggers because Tiruppur is ~12 km from Coimbatore
-5. Move coordinates closer to 11.0168, 76.9558 → **ALARM fires within 2 km!**
+
 
 ### Method 3: API-only Testing (curl)
 ```bash
@@ -130,22 +105,8 @@ curl http://localhost:5000/api/train/12163
 
 ---
 
-## 🔴 Live Mode (Real Train Data)
 
-### Start Python Scraper
-```bash
-cd TrainTrack
-source venv/bin/activate   # Linux/Mac
-# OR: venv\Scripts\activate  # Windows
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
 
-### Verify Scraper is Working
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/demo/12043
-curl http://localhost:8000/train/12163   # Requires real train running today
-```
 
 ### Popular Train Numbers to Test
 | Train No | Name                        | Route                    |
@@ -278,5 +239,4 @@ When the train enters a tunnel (no internet):
 | Audio | Web Audio API | No MP3 files needed, synthesized |
 | Background | Service Workers | Notifications survive screen lock |
 | Backend | Node.js + Express | Proxy/bridge to Python service |
-| Scraper | Python FastAPI + httpx + BeautifulSoup | Async scraping |
 | Packaging | PWA + manifest.json | Installable as mobile app |
